@@ -4,74 +4,46 @@ const data = text.toString().split("\n");
 
 const testIt = () => {
   let partialStr = '';
-  const jsonArr = [];
   const finalData = {
     show1: {},
     show2: {}
   };
   let showCounter = 0;
-  let show1Sensor1 = 0;
-  let show1Sensor2 = 0;
-  let show2Sensor1 = 0;
-  let show2Sensor2 = 0;
 
-  const insertForShow = (jsonData) => {
-    if (jsonData.packet_type === 1 && jsonData.data_type === 0) {
+  const insertForShow = ({ packet_type, data_type, ...rest }) => {
+    if (packet_type === 1 && data_type === 0) {
       showCounter += 1;
-      finalData[`show${showCounter}`]['processed_data'] = jsonData;
+      finalData[`show${showCounter}`]['processed_data'] = rest;
     }
-    if (jsonData.packet_type === 1 && jsonData.data_type === 1) {
-      if (showCounter === 1) show1Sensor1 += 1;
-      else show2Sensor1 += 1;
-    }
-    if (jsonData.packet_type === 1 && jsonData.data_type === 2) {
-      if (showCounter === 1) show1Sensor2 += 1;
-      else show2Sensor2 += 1;
+    if (packet_type === 1 && (data_type === 1 || data_type === 2)) {
+      const count = (finalData[`show${showCounter}`][`sensor${data_type}`] || 0) + 1;
+      finalData[`show${showCounter}`][`sensor${data_type}`] = count;
     }
   }
 
   const testStr = (jsonStr) => {
-    try {
-      const parsedJSON = JSON.parse(jsonStr)
-      jsonArr.push(parsedJSON);
+    let posOfClose = jsonStr.indexOf('}');
+    if (posOfClose === -1) {
+      return jsonStr;
+    } else {
+      const parsedJSON = JSON.parse(jsonStr.slice(0, posOfClose + 1))
       insertForShow(parsedJSON);
-      return '';
-    } catch {
-      let posOfClose = jsonStr.indexOf('}');
-      if (posOfClose === -1) {
-        return jsonStr;
-      } else {
-        try {
-          const parsedJSON = JSON.parse(jsonStr.slice(0, posOfClose + 1))
-          jsonArr.push(parsedJSON);
-          insertForShow(parsedJSON);
-          if (posOfClose === jsonStr.length - 1) {
-            return '';
-          } else {
-            return testStr(jsonStr.slice(posOfClose + 1, jsonStr.length));
-          }
-        } catch (error) {
-          console.error('YOU MUST NOT BE HERE! 💣', error);
-        }
-      }
+      return testStr(jsonStr.slice(posOfClose + 1, jsonStr.length));
     }
   };
 
   for (let index = 0; index < data.length; index++) {
     const element = data[index];
-    if (partialStr !== '') {
-      partialStr = testStr(partialStr + element);
-    } else {
-      partialStr = testStr(element);
-    }
+    partialStr = testStr(partialStr + element);
   }
-
-  finalData['show1']['sensor1'] = show1Sensor1;
-  finalData['show1']['sensor2'] = show1Sensor2;
-  finalData['show2']['sensor1'] = show2Sensor1;
-  finalData['show2']['sensor2'] = show2Sensor2;
-
   return finalData;
 }
 
-console.table(testIt());
+try {
+  const finalData = testIt();
+  fs.writeFile('output.json', JSON.stringify(finalData), (err) => {
+    if (err) throw err;
+  });
+} catch (error) {
+  console.error('YOU MUST NOT BE HERE! 💣', error);
+}
